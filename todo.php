@@ -34,8 +34,6 @@ $data_sekolah = $result_sekolah->fetch_assoc() ?? [
     'completed_tasks' => 0,
     'overdue_tasks' => 0
 ];
-
-
 // Query untuk tugas
 $query = "SELECT * FROM tasks WHERE user_id = ? AND task LIKE ?";
 if ($sort_by == 'completed') {
@@ -67,29 +65,50 @@ foreach ($todos as $todo) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Menambah tugas
-    if (isset($_POST['add_task'])) {
-        $task = $_POST['task'] ?? null;
-        $description = $_POST['description'] ?? null;
-        $deadline = $_POST['deadline'] ?? null;
-        $priority = $_POST['priority'] ?? null;
-
-        if (!empty($task) && !empty($description) && !empty($deadline) && !empty($priority)) {
-            $stmt = $conn->prepare("INSERT INTO tasks (user_id, task, description, deadline, priority) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param('issss', $_SESSION['user_id'], $task, $description, $deadline, $priority);
-            $stmt->execute();
-            header('Location: todo.php');
-            exit;
-        } else {
-            echo "Harap isi semua kolom!";
-        }
+   // Menambah tugas
+if (isset($_POST['add_task'])) {
+    $task = trim($_POST['task']);
+    $description = trim($_POST['description']);
+    $deadline = $_POST['deadline'];
+    $priority = $_POST['priority']; 
+    $user_id = $_SESSION['user_id'];
+    if (empty($task) || empty($description) || empty($deadline) || empty($priority)) {
+        $_SESSION['error'] = "Harap isi semua kolom!";
+        header('Location: todo.php');
+        exit;
+    }
+    // Validasi deadline 
+    $today = date('Y-m-d');
+    if ($deadline < $today) {
+        $_SESSION['error'] = "Tanggal deadline tidak boleh di masa lalu!";
+        header('Location: todo.php');
+        exit;
+    }
+    // Validasi prioritas 
+    $allowed_priorities = ['Penting', 'Sedang', 'Biasa'];
+    if (!in_array($priority, $allowed_priorities)) {
+        $_SESSION['error'] = "Prioritas tidak valid!";
+        header('Location: todo.php');
+        exit;
     }
 
-    // Menghapus tugas dan subtugas terkait
+    // Simpan ke database menggunakan prepared statement
+    $stmt = $conn->prepare("INSERT INTO tasks (user_id, task, description, deadline, priority) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param('issss', $user_id, $task, $description, $deadline, $priority); // 's' untuk string
+
+    if ($stmt->execute()) {
+        $_SESSION['success'] = "Tugas berhasil ditambahkan!";
+    } else {
+        $_SESSION['error'] = "Gagal menambahkan tugas!";
+    }
+
+    header('Location: todo.php');
+    exit;
+}
+
+    // Menghapus tugas dan subtugas 
     if (isset($_POST['delete_task'])) {
         $task_id = $_POST['task_id'];
-
-        // Hapus subtugas terlebih dahulu
         $stmt = $conn->prepare("DELETE FROM subtasks WHERE task_id = ?");
         $stmt->bind_param('i', $task_id);
         $stmt->execute();
@@ -104,8 +123,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             echo "Gagal menghapus, ID tidak ditemukan atau error.";
         }
-
-        // Refresh halaman agar tugas yang dihapus hilang dari tampilan
         header("Location: todo.php");
         exit;
     }
@@ -180,6 +197,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo "Subtugas tidak boleh kosong!";
         }
     }
+    if (isset($_POST['edit_subtask'])) {
+        $subtask_id = $_POST['subtask_id'];
+        $subtask_name = $_POST['subtask_name'];
+        $stmt = $conn->prepare("UPDATE subtasks SET subtask = ? WHERE id = ?");
+        $stmt->bind_param('si', $subtask_name, $subtask_id);
+        $stmt->execute();
+        header("Location: todo.php");
+        exit;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -191,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-   body {
+        body {
             font-family: 'Arial', sans-serif;
             background-color: #f8f9fa;
         }
@@ -200,45 +226,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-top: 30px;
         }
         .card {
-    display: flex;
-    flex-direction: column;
-    height: 100%; /* Menjaga tinggi card tetap sama */
-}
-
-.card-body {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    height: 100%;
-}
-
+             border: 1px solid #ddd; 
+             border-radius: 8px;
+             margin-bottom: 20px;
+             background-color: #fff;
+             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+             padding: 20px; 
+        }
+        .card-body {
+            padding: 15px;
+        } 
         .card-title {
-        font-weight: bold;
-        font-size: 1.5rem;  /* Ukuran lebih besar agar jelas */
-        margin-bottom: 10px;
+              font-weight: bold;
+              font-size: 1.5rem;  
+              margin-bottom: 10px;
         }
         .card-text {
-        font-size: 1rem;
-        color: #555;
-        margin-bottom: 10px; /* Menambahkan sedikit jarak antara teks */
-    }
-    .statistik-sekolah .card-text {
-    font-size: 1.5rem; /* Perbesar ukuran teks */
-    font-weight: bold;
-}
-
-.card:hover {
-    transform: scale(1.05); /* Membuat card sedikit lebih besar saat hover */
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Menambahkan bayangan untuk efek hover */
-    transition: transform 0.3s ease, box-shadow 0.3s ease; /* Membuat transisi halus */
-}
-    .priority-label {
-    padding: 5px 15px;
-    font-size: 0.875rem;
-    border-radius: 15px;
-    font-weight: bold;
-    text-transform: uppercase;
-    }
+             font-size: 1rem;
+             color: #555;
+             margin-bottom: 10px; 
+        }
+        .statistik-sekolah .card-text {
+             font-size: 1.5rem;
+             font-weight: bold;
+        }
+        .priority-label {
+             padding: 5px 15px;
+             font-size: 0.875rem;
+             border-radius: 15px;
+             font-weight: bold;
+             text-transform: uppercase;
+        }
         .badge-important { background-color: #f44336; color: white; }
         .badge-medium { background-color: #ff9800; color: white; }
         .badge-normal { background-color: #4caf50; color: white; }
@@ -261,51 +279,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .task-actions button {
             margin-right: 5px;
         }
-        .btn:hover {
-    opacity: 0.9; /* Mengurangi sedikit opacity tombol untuk memberikan efek hover */
-    transform: translateY(-3px); /* Memberikan efek tombol sedikit naik saat hover */
-    transition: transform 0.3s ease, opacity 0.3s ease; /* Membuat transisi halus */
-}
-        .subtask {
-    background-color: #f9f9f9;
-    border-left: 4px solid #007bff;
-    padding: 10px;
-    margin-bottom: 5px;
-    font-size: 0.9rem;
-}
-
-.subtask-list {
-    max-height: 150px; /* Sesuaikan tinggi maksimal */
-    overflow-y: auto; /* Tambahkan scroll jika subtugas terlalu banyak */
-    padding: 5px;
-    background-color: #f9f9f9;
-    border-radius: 5px;
-}
-        .subtask-item {
-         display: flex;
-        align-items: center;
-        justify-content: space-between;
-      margin-bottom: 10px;
+        .subtask-list {
+            margin-top: 10px;
+            padding-left: 20px;
         }
-     .subtask-item label {
-    margin-left: 10px;
-    font-size: 1rem; /* Ukuran font sedikit lebih besar agar lebih jelas */
-}     
-.subtask-actions {
-    display: flex;
-    gap: 5px;
-}
-
-.subtask-actions button {
-    padding: 5px 10px;
-    font-size: 0.875rem;
-}
-.subtask-item:hover {
-    background-color: #f1f3f5; /* Memberikan warna latar belakang lebih terang saat hover */
-    cursor: pointer; /* Menampilkan kursor pointer agar menunjukkan elemen dapat diklik */
-    transition: background-color 0.3s ease; /* Transisi halus untuk perubahan warna */
-}
-
+        .subtask {
+            margin-top: 15px; 
+            padding: 10px;
+            background-color: #f9f9f9; 
+            border-left: 4px solid #007bff; 
+            }
+        .subtask-item {
+             display: flex;
+             align-items: center;
+             justify-content: space-between;
+             margin-bottom: 10px;
+        }
+         .subtask-item label {
+            margin-left: 10px;
+            font-size: 1rem; 
+        }     
+        .subtask-actions {
+             display: flex;
+             gap: 5px;
+        }
+        .subtask-actions button {
+            padding: 5px 10px;
+            font-size: 0.875rem;
+        }
     </style>
 </head>
 <body>
@@ -314,12 +315,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <a class="navbar-brand" href="#">Daftar Tugas</a>
         <div class="d-flex">
             <span class="text-white"><?= $current_date ?></span>
-            
-            <!-- Ikon Profil -->
-            <a href="profile.php" class="btn btn-light ms-3">
-                <i class="bi bi-person-circle"></i> Profil
-            </a>
-            
             <a href="logout.php" class="btn btn-danger ms-3">
                 <i class="bi bi-box-arrow-right"></i> Keluar
             </a>
@@ -328,17 +323,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </nav>
     <div class="container my-5">
         <h1 class="text-center mb-4">Daftar Tugas</h1>
-
         <!-- Form Pencarian -->
         <form method="GET" class="mb-4">
             <input type="text" name="search" value="<?= htmlspecialchars($search) ?>" class="form-control" placeholder="Cari tugas...">
         </form>
-        <!-- Button untuk menambah tugas -->
+        <!-- Button Tambah tugas -->
         <button class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#addTaskModal">
             <i class="bi bi-plus-circle"></i> Tambah Tugas
         </button>
-        <h3 class="text-center mb-4">Statistik Tugas </h3>
-<div class="row g-3 mb-4 statistik-sekolah">
+        <h3 class="text-center mb-4">Statistik Tugas Sekolah</h3>
+    <div class="row g-3 mb-4 statistik-sekolah">
     <div class="col-md-4">
         <div class="card border-primary shadow-sm">
             <div class="card-header">📚 Total Tugas</div>
@@ -363,8 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </div>
     </div>
-</div>
-
+    </div>
         <label for="sort" class="form-label">Sortir Berdasarkan:</label>
         <select id="sort" class="form-select" onchange="location = this.value;">
             <option value="todo.php?sort_by=">Pilih</option>
@@ -389,102 +382,155 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <form method="POST" class="d-inline-block">
                             <input type="hidden" name="task_id" value="<?= $todo['id'] ?>">
                             <input type="checkbox" name="complete_task" value="1" 
-                                   <?= $todo['completed'] ? 'checked' : '' ?>
-                                   onchange="this.form.submit();">
-                            <label>Selesaikan</label>
-                        </form>
-                        <!-- Button untuk menghapus tugas -->
-                        <form method="POST" class="d-inline-block">
-                            <input type="hidden" name="task_id" value="<?= $todo['id'] ?>">
-                            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteTaskModal" data-task_id="<?= $todo['id'] ?>">
-                                <i class="bi bi-trash"></i> Hapus
-                            </button>
-                        </form>
-                        <!-- Button untuk mengedit tugas -->
-                        <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editTaskModal" data-task_id="<?= $todo['id'] ?>" data-task="<?= $todo['task'] ?>" data-description="<?= $todo['description'] ?>" data-deadline="<?= $todo['deadline'] ?>" data-priority="<?= $todo['priority'] ?>">
+                            <?= $todo['completed'] ? 'checked disabled' : '' ?>
+                         onchange="this.form.submit();">
+                 <label>Selesaikan</label>
+             </form>
+            <!-- Button untuk menghapus tugas -->
+            <button type="button" class="btn btn-danger btn-sm delete-task-btn" 
+             data-bs-toggle="modal" 
+             data-bs-target="#deleteModal"
+             data-task_id="<?= $todo['id'] ?>">
+         <i class="bi bi-trash"></i> Hapus
+        </button>
+         <!-- Button Edit Tugas -->
+         <?php if (!$todo['completed']): ?>
+         <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editTaskModal" 
+            data-task_id="<?= $todo['id'] ?>" data-task="<?= $todo['task'] ?>" 
+            data-description="<?= $todo['description'] ?>" 
+            data-deadline="<?= $todo['deadline'] ?>" 
+            data-priority="<?= $todo['priority'] ?>">
+         <i class="bi bi-pencil"></i> Edit
+    </button>
+<?php endif; ?>
+<!-- Subtasks -->
+<?php if (isset($subtasks[$todo['id']])): ?>
+    <?php foreach ($subtasks[$todo['id']] as $subtask): ?>
+        <div class="subtask">
+            <div class="subtask-item">
+                <span><?= htmlspecialchars($subtask['subtask']) ?></span>
+                <div class="subtask-actions">
+                    <?php if (!$todo['completed']): ?>
+                        <button class="btn btn-warning btn-sm edit-subtask-btn"
+                                data-bs-toggle="modal"
+                                data-bs-target="#editSubtaskModal"
+                                data-subtask_id="<?= $subtask['id'] ?>"
+                                data-subtask="<?= htmlspecialchars($subtask['subtask']) ?>">
                             <i class="bi bi-pencil"></i> Edit
                         </button>
-                        <!-- Subtasks -->
-                        <?php if (isset($subtasks[$todo['id']])): ?>
-                            <?php foreach ($subtasks[$todo['id']] as $subtask): ?>
-                                <div class="subtask">
-                                    <!-- Menampilkan nama subtugas -->
-                                    <div class="subtask-item">
-                                        <span><?= htmlspecialchars($subtask['subtask']) ?></span>
-                                    </div>
-                                    <!-- Form untuk menandai subtugas selesai -->
-                                    <form method="POST" class="d-inline-block">
-                                        <input type="hidden" name="subtask_id" value="<?= $subtask['id'] ?>">
-                                        <button type="submit" name="complete_subtask" class="btn btn-sm btn-success">
-                                            <i class="bi bi-check"></i> Selesaikan
-                                        </button>
-                                    </form>
+                    <?php endif; ?>
 
-                                    <!-- Button untuk menghapus subtugas -->
-                                    <form method="POST" class="d-inline-block">
-                                        <input type="hidden" name="subtask_id" value="<?= $subtask['id'] ?>">
-                                        <button type="submit" class="btn btn-danger btn-sm" name="delete_subtask">
-                                            <i class="bi bi-trash"></i> Hapus
-                                        </button>
-                                    </form>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-
-                        <!-- Form untuk menambah subtugas -->
-                        <form method="POST" class="d-inline-block">
-                            <input type="hidden" name="task_id" value="<?= $todo['id'] ?>">
-                            <input type="text" name="subtask" class="form-control form-control-sm" placeholder="Subtugas...">
-                            <button type="submit" class="btn btn-success btn-sm mt-2" name="add_subtask">
-                                <i class="bi bi-plus"></i> Tambah Subtugas
-                            </button>
-                        </form>
-                    </div>
+                    <form method="POST" class="d-inline-block">
+                        <input type="hidden" name="subtask_id" value="<?= $subtask['id'] ?>">
+                        <button type="submit" class="btn btn-danger btn-sm" name="delete_subtask">
+                            <i class="bi bi-trash"></i> Hapus
+                        </button>
+                    </form>
                 </div>
             </div>
+        </div>
+    <?php endforeach; ?>
+<?php endif; ?>
+<!-- Modal Edit Subtask -->
+<div class="modal fade" id="editSubtaskModal" tabindex="-1" aria-labelledby="editSubtaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSubtaskModalLabel">Edit Subtugas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST">
+                    <input type="hidden" name="subtask_id" id="edit_subtask_id">
+                    <div class="mb-3">
+                        <label for="edit_subtask_name" class="form-label">Nama Subtugas</label>
+                        <input type="text" class="form-control" id="edit_subtask_name" name="subtask_name" required>
+                    </div>
+                    <button type="submit" name="edit_subtask" class="btn btn-warning">Perbarui Subtugas</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+  <!-- Form untuk menambah subtugas -->
+     <form method="POST" class="d-inline-block">
+         <input type="hidden" name="task_id" value="<?= $todo['id'] ?>">
+           <input type="text" name="subtask" class="form-control form-control-sm" placeholder="Subtugas...">
+             <button type="submit" class="btn btn-success btn-sm mt-2" name="add_subtask">
+              <i class="bi bi-plus"></i> Tambah Subtugas
+                 </button>
+                </form>
+            </div>
+        </div>
+        </div>
         <?php endforeach; ?>
     <?php else: ?>
         <p class="text-center">Tidak ada tugas yang ditemukan.</p>
     <?php endif; ?>
 </div>
-
-    <!-- Modal untuk menambah tugas -->
-    <div class="modal fade" id="addTaskModal" tabindex="-1" aria-labelledby="addTaskModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="addTaskModalLabel">Tambah Tugas</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <form method="POST">
-                        <div class="mb-3">
-                            <label for="task" class="form-label">Nama Tugas</label>
-                            <input type="text" class="form-control" id="task" name="task" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Deskripsi</label>
-                            <textarea class="form-control" id="description" name="description"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="deadline" class="form-label">Tenggat Waktu</label>
-                            <input type="datetime-local" class="form-control" id="deadline" name="deadline">
-                        </div>
-                        <div class="mb-3">
-                        <label for="priority">Prioritas:</label>
-                        <select name="priority" class="form-select">
-                        <option value="Penting">Penting</option>
-                        <option value="Sedang">Sedang</option>
-                         <option value="Biasa">Biasa</option>
-                        </select>
-                        </div>
-                        <button type="submit" name="add_task" class="btn btn-primary">Tambah Tugas</button>
-                    </form>
-                </div>
+    </div>
+   <!-- Modal untuk menambah tugas -->
+<div class="modal fade" id="addTaskModal" tabindex="-1" aria-labelledby="addTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addTaskModalLabel">Tambah Tugas</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="task" class="form-label">Nama Tugas</label>
+                        <input type="text" class="form-control" id="task" name="task" placeholder="Masukkan nama tugas" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Deskripsi</label>
+                        <textarea class="form-control" id="description" name="description" placeholder="Tambahkan deskripsi tugas"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="deadline" class="form-label">Tenggat Waktu</label>
+                        <input type="datetime-local" class="form-control" id="deadline" name="deadline" required>
+                    </div>
+                    <div class="mb-3">
+                         <label for="priority" class="form-label">Prioritas</label>
+                          <select name="priority" id="priority" class="form-select" required>
+                           <option value="Penting">Penting</option>
+                           <option value="Sedang">Sedang</option>
+                           <option value="Biasa">Biasa</option>
+                          </select>
+                    </div>
+                    <button type="submit" name="add_task" id="addTaskBtn" class="btn btn-primary w-100">
+                        <i class="bi bi-plus-circle"></i> Tambah Tugas
+                    </button>
+                </form>
             </div>
         </div>
     </div>
-<!-- Modal untuk mengedit tugas -->
+</div>
+<!-- Modal Konfirmasi Hapus -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Konfirmasi Hapus</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Apakah Anda yakin ingin menghapus tugas ini?</p>
+            </div>
+            <div class="modal-footer">
+                <form method="POST">
+                    <input type="hidden" name="task_id" id="delete_task_id">
+                    <button type="submit" name="delete_task" class="btn btn-danger">Hapus</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Edit Tugas -->
 <div class="modal fade" id="editTaskModal" tabindex="-1" aria-labelledby="editTaskModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -496,20 +542,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <form method="POST">
                     <input type="hidden" name="task_id" id="edit_task_id">
                     <div class="mb-3">
-                        <label for="task" class="form-label">Nama Tugas</label>
+                        <label for="edit_task" class="form-label">Nama Tugas</label>
                         <input type="text" class="form-control" id="edit_task" name="task" required>
                     </div>
                     <div class="mb-3">
-                        <label for="description" class="form-label">Deskripsi</label>
+                        <label for="edit_description" class="form-label">Deskripsi</label>
                         <textarea class="form-control" id="edit_description" name="description"></textarea>
                     </div>
                     <div class="mb-3">
-                    <label for="priority">Prioritas:</label>
-                    <select name="priority">
-    <option value="Biasa" <?= (isset($row['priority']) && $row['priority'] == 'Biasa') ? 'selected' : '' ?>>Biasa</option>
-    <option value="Sedang" <?= (isset($row['priority']) && $row['priority'] == 'Sedang') ? 'selected' : '' ?>>Sedang</option>
-    <option value="Penting" <?= (isset($row['priority']) && $row['priority'] == 'Penting') ? 'selected' : '' ?>>Penting</option>
-</select>
+                 <label for="edit_deadline" class="form-label">Tenggat Waktu</label>
+               <input type="datetime-local" class="form-control" id="edit_deadline" name="deadline" readonly>
+                </div>
+                    <div class="mb-3">
+                        <label for="edit_priority">Prioritas:</label>
+                        <select id="edit_priority" name="priority" class="form-select">
+                            <option value="Biasa">Biasa</option>
+                            <option value="Sedang">Sedang</option>
+                            <option value="Penting">Penting</option>
+                        </select>
                     </div>
                     <button type="submit" name="edit_task" class="btn btn-warning">Perbarui Tugas</button>
                 </form>
@@ -517,79 +567,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     </div>
 </div>
-<!-- Modal Konfirmasi Keluar -->
-<div class="modal fade" id="logoutModal" tabindex="-1" aria-labelledby="logoutModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="logoutModalLabel">Konfirmasi Keluar</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                Apakah Anda yakin ingin keluar?
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <a href="logout.php" class="btn btn-danger">Keluar</a>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Konfirmasi Hapus Tugas -->
-<div class="modal fade" id="deleteTaskModal" tabindex="-1" aria-labelledby="deleteTaskModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="deleteTaskModalLabel">Konfirmasi Hapus Tugas</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                Apakah Anda yakin ingin menghapus tugas ini?
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
-                <form method="POST" id="deleteTaskForm">
-                    <input type="hidden" name="task_id" id="taskIdToDelete">
-                    <button type="submit" class="btn btn-danger" name="delete_task">Hapus Tugas</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    // Modal Konfirmasi Hapus Tugas
-    const deleteTaskModal = document.getElementById('deleteTaskModal');
-    deleteTaskModal.addEventListener('show.bs.modal', function (event) {
-        const button = event.relatedTarget; // Tombol yang memicu modal (hapus tugas)
-        const taskId = button.getAttribute('data-task_id');
-        // Menetapkan nilai task_id pada form yang akan dikirim
-        document.getElementById('taskIdToDelete').value = taskId;
-    });
+    function setMinDeadline() {
+        let now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // Menyesuaikan zona waktu
+        document.getElementById('deadline').min = now.toISOString().slice(0, 16);
+    }
 
-    // Modal Konfirmasi Edit Tugas
-    const editTaskModal = document.getElementById('editTaskModal');
-    editTaskModal.addEventListener('show.bs.modal', function (event) {
-        const button = event.relatedTarget; // Tombol yang memicu modal (edit task)
-        const taskId = button.getAttribute('data-task_id');
-        const taskName = button.getAttribute('data-task');
-        const description = button.getAttribute('data-description');
-        const deadline = button.getAttribute('data-deadline');
-        const priority = button.getAttribute('data-priority');
-        // Mengatur nilai pada modal
-        document.getElementById('edit_task_id').value = taskId;
-        document.getElementById('edit_task').value = taskName;
-        document.getElementById('edit_description').value = description;
-        document.getElementById('edit_deadline').value = deadline;
-        // Menetapkan nilai prioritas yang sudah ada
-        const prioritySelect = document.getElementById('edit_priority');
-        prioritySelect.value = priority;
-    });
+    // Set minimal deadline saat modal dibuka
+    document.addEventListener('DOMContentLoaded', setMinDeadline);
+
+    // Modal Edit Tugas
+const editTaskModal = document.getElementById('editTaskModal');
+editTaskModal.addEventListener('show.bs.modal', function (event) {
+    const button = event.relatedTarget;
+    const taskId = button.getAttribute('data-task_id');
+    const taskName = button.getAttribute('data-task');
+    const description = button.getAttribute('data-description');
+    const deadline = button.getAttribute('data-deadline');
+    const priority = button.getAttribute('data-priority');
+
+    // Isi data modal edit tugas
+    document.getElementById('edit_task_id').value = taskId;
+    document.getElementById('edit_task').value = taskName;
+    document.getElementById('edit_description').value = description;
+    document.getElementById('edit_deadline').value = deadline;
+    
+    const editPriority = document.getElementById('edit_priority');
+    if (priority === "Penting" || priority === "Sedang" || priority === "Biasa") {
+        editPriority.value = priority;
+    } else {
+        editPriority.value = "Biasa"; 
+    }
 });
+    // Event Listener untuk Edit Subtask
+    document.querySelectorAll('.edit-subtask-btn').forEach(button => {
+        button.addEventListener('click', function () {
+            const subtaskId = this.getAttribute('data-subtask_id');
+            const subtaskName = this.getAttribute('data-subtask');
+            // Isi data modal edit subtask
+            document.getElementById('edit_subtask_id').value = subtaskId;
+            document.getElementById('edit_subtask_name').value = subtaskName;
+        });
+    });
 
+    // Modal Hapus Tugas
+    const deleteModal = document.getElementById('deleteModal');
+    deleteModal.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const taskId = button.getAttribute('data-task_id');
+        document.getElementById('delete_task_id').value = taskId;
+    });
 </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
