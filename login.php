@@ -18,8 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($user = $result->fetch_assoc()) {
         if (password_verify($_POST['password'], $user['password'])) {
             $_SESSION['user_id'] = $user['id'];
-            $_SESSION['full_name'] = $user['full_name']; // Simpan nama pengguna
-            $_SESSION['profile_picture'] = $user['profile_picture']; // Simpan foto profil
+            $_SESSION['full_name'] = $user['full_name']; 
             header('Location: todo.php');
             exit;
         } else {
@@ -30,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Pesan Hari
+
 $pesanHari = [
     "Monday" => "Selamat Hari Senin! Awali minggu dengan semangat 💪",
     "Tuesday" => "Selamat Hari Selasa! Tetap produktif 🚀",
