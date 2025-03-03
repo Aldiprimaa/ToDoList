@@ -394,15 +394,18 @@ if (isset($_POST['add_task'])) {
          <i class="bi bi-trash"></i> Hapus
         </button>
          <!-- Button Edit Tugas -->
-         <?php if (!$todo['completed']): ?>
-         <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editTaskModal" 
-            data-task_id="<?= $todo['id'] ?>" data-task="<?= $todo['task'] ?>" 
-            data-description="<?= $todo['description'] ?>" 
-            data-deadline="<?= $todo['deadline'] ?>" 
-            data-priority="<?= $todo['priority'] ?>">
-         <i class="bi bi-pencil"></i> Edit
+         <?php
+$current_date = date("Y-m-d H:i:s"); // Ambil waktu sekarang
+if (!$todo['completed'] && $todo['deadline'] > $current_date): ?>
+    <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#editTaskModal" 
+        data-task_id="<?= $todo['id'] ?>" data-task="<?= $todo['task'] ?>" 
+        data-description="<?= $todo['description'] ?>" 
+        data-deadline="<?= $todo['deadline'] ?>" 
+        data-priority="<?= $todo['priority'] ?>">
+        <i class="bi bi-pencil"></i> Edit
     </button>
 <?php endif; ?>
+
 <!-- Subtasks -->
 <?php if (isset($subtasks[$todo['id']])): ?>
     <?php foreach ($subtasks[$todo['id']] as $subtask): ?>
@@ -410,7 +413,7 @@ if (isset($_POST['add_task'])) {
             <div class="subtask-item">
                 <span><?= htmlspecialchars($subtask['subtask']) ?></span>
                 <div class="subtask-actions">
-                    <?php if (!$todo['completed']): ?>
+                    <?php if (!$todo['completed'] && strtotime($todo['deadline']) >= time()): ?>
                         <button class="btn btn-warning btn-sm edit-subtask-btn"
                                 data-bs-toggle="modal"
                                 data-bs-target="#editSubtaskModal"
@@ -420,17 +423,20 @@ if (isset($_POST['add_task'])) {
                         </button>
                     <?php endif; ?>
 
-                    <form method="POST" class="d-inline-block">
-                        <input type="hidden" name="subtask_id" value="<?= $subtask['id'] ?>">
-                        <button type="submit" class="btn btn-danger btn-sm" name="delete_subtask">
-                            <i class="bi bi-trash"></i> Hapus
-                        </button>
-                    </form>
+                    <?php if (strtotime($todo['deadline']) >= time()): ?>
+                        <form method="POST" class="d-inline-block">
+                            <input type="hidden" name="subtask_id" value="<?= $subtask['id'] ?>">
+                            <button type="submit" class="btn btn-danger btn-sm" name="delete_subtask">
+                                <i class="bi bi-trash"></i> Hapus
+                            </button>
+                        </form>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     <?php endforeach; ?>
 <?php endif; ?>
+
 <!-- Modal Edit Subtask -->
 <div class="modal fade" id="editSubtaskModal" tabindex="-1" aria-labelledby="editSubtaskModalLabel" aria-hidden="true">
     <div class="modal-dialog">
@@ -453,23 +459,27 @@ if (isset($_POST['add_task'])) {
     </div>
 </div>
 
-  <!-- Form untuk menambah subtugas -->
-     <form method="POST" class="d-inline-block">
-         <input type="hidden" name="task_id" value="<?= $todo['id'] ?>">
-           <input type="text" name="subtask" class="form-control form-control-sm" placeholder="Subtugas...">
-             <button type="submit" class="btn btn-success btn-sm mt-2" name="add_subtask">
-              <i class="bi bi-plus"></i> Tambah Subtugas
-                 </button>
-                </form>
-            </div>
-        </div>
-        </div>
-        <?php endforeach; ?>
-    <?php else: ?>
-        <p class="text-center">Tidak ada tugas yang ditemukan.</p>
-    <?php endif; ?>
+<!-- Form untuk menambah subtugas -->
+<?php if (strtotime($todo['deadline']) >= time()): ?>
+    <form method="POST" class="d-inline-block">
+        <input type="hidden" name="task_id" value="<?= $todo['id'] ?>">
+        <input type="text" name="subtask" class="form-control form-control-sm" placeholder="Subtugas...">
+        <button type="submit" class="btn btn-success btn-sm mt-2" name="add_subtask">
+            <i class="bi bi-plus"></i> Tambah Subtugas
+        </button>
+    </form>
+<?php endif; ?>
+
 </div>
-    </div>
+</div>
+</div>
+<?php endforeach; ?>
+<?php else: ?>
+    <p class="text-center">Tidak ada tugas yang ditemukan.</p>
+<?php endif; ?>
+</div>
+</div>
+
    <!-- Modal untuk menambah tugas -->
 <div class="modal fade" id="addTaskModal" tabindex="-1" aria-labelledby="addTaskModalLabel" aria-hidden="true">
     <div class="modal-dialog">
