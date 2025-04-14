@@ -18,7 +18,7 @@ $search = $_GET['search'] ?? '';
 $sort_by = $_GET['sort_by'] ?? '';
 $current_date = date('l, d F Y');
 
-// Query Statistik Tugas Sekolah
+// Statistik Tugas Sekolah
 $query_sekolah = "SELECT 
             COUNT(*) AS total_tasks, 
             SUM(completed) AS completed_tasks,
@@ -34,7 +34,7 @@ $data_sekolah = $result_sekolah->fetch_assoc() ?? [
     'completed_tasks' => 0,
     'overdue_tasks' => 0
 ];
-// Query untuk tugas
+
 $query = "SELECT * FROM tasks WHERE user_id = ? AND task LIKE ?";
 if ($sort_by == 'completed') {
     $query .= " ORDER BY completed DESC";
@@ -65,7 +65,7 @@ foreach ($todos as $todo) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-   // Menambah tugas
+   
 if (isset($_POST['add_task'])) {
     $task = trim($_POST['task']);
     $description = trim($_POST['description']);
@@ -77,14 +77,14 @@ if (isset($_POST['add_task'])) {
         header('Location: todo.php');
         exit;
     }
-    // Validasi deadline 
+    
     $today = date('Y-m-d');
     if ($deadline < $today) {
         $_SESSION['error'] = "Tanggal deadline tidak boleh di masa lalu!";
         header('Location: todo.php');
         exit;
     }
-    // Validasi prioritas 
+   
     $allowed_priorities = ['Penting', 'Sedang', 'Biasa'];
     if (!in_array($priority, $allowed_priorities)) {
         $_SESSION['error'] = "Prioritas tidak valid!";
@@ -92,7 +92,7 @@ if (isset($_POST['add_task'])) {
         exit;
     }
 
-    // Simpan ke database menggunakan prepared statement
+    
     $stmt = $conn->prepare("INSERT INTO tasks (user_id, task, description, deadline, priority) VALUES (?, ?, ?, ?, ?)");
     $stmt->bind_param('issss', $user_id, $task, $description, $deadline, $priority); // 's' untuk string
 
@@ -106,14 +106,14 @@ if (isset($_POST['add_task'])) {
     exit;
 }
 
-    // Menghapus tugas dan subtugas 
+    
     if (isset($_POST['delete_task'])) {
         $task_id = $_POST['task_id'];
         $stmt = $conn->prepare("DELETE FROM subtasks WHERE task_id = ?");
         $stmt->bind_param('i', $task_id);
         $stmt->execute();
 
-        // Hapus tugas utama
+        
         $stmt = $conn->prepare("DELETE FROM tasks WHERE id = ?");
         $stmt->bind_param('i', $task_id);
         $stmt->execute();
@@ -127,7 +127,7 @@ if (isset($_POST['add_task'])) {
         exit;
     }
 
-    // Menghapus subtugas
+    
     if (isset($_POST['delete_subtask'])) {
         $stmt = $conn->prepare("DELETE FROM subtasks WHERE id = ?");
         $stmt->bind_param('i', $_POST['subtask_id']);
@@ -136,7 +136,7 @@ if (isset($_POST['add_task'])) {
         exit;
     }
 
-    // Mengedit tugas
+    
     if (isset($_POST['edit_task'])) {
         $task_id = $_POST['task_id'];
         $task_name = $_POST['task'];
@@ -154,16 +154,16 @@ if (isset($_POST['add_task'])) {
         }
     }
 
-    // Menandai tugas selesai
+    
     if (isset($_POST['complete_task'])) {
         $task_id = $_POST['task_id'];
 
-        // Update tugas
+        
         $stmt = $conn->prepare("UPDATE tasks SET completed = 1 WHERE id = ?");
         $stmt->bind_param('i', $task_id);
         $stmt->execute();
 
-        // Update subtugas
+        
         $stmt = $conn->prepare("UPDATE subtasks SET completed = 1 WHERE task_id = ?");
         $stmt->bind_param('i', $task_id);
         $stmt->execute();
@@ -172,7 +172,7 @@ if (isset($_POST['add_task'])) {
         exit;
     }
 
-    // Menandai subtugas selesai
+    
     if (isset($_POST['complete_subtask'])) {
         $subtask_id = $_POST['subtask_id'];
         $stmt = $conn->prepare("UPDATE subtasks SET completed = 1 WHERE id = ?");
@@ -182,7 +182,6 @@ if (isset($_POST['add_task'])) {
         exit;
     }
 
-    // Menambah subtugas
     if (isset($_POST['add_subtask'])) {
         $task_id = $_POST['task_id'];
         $subtask = $_POST['subtask'] ?? null;
@@ -315,9 +314,10 @@ if (isset($_POST['add_task'])) {
         <a class="navbar-brand" href="#">Daftar Tugas</a>
         <div class="d-flex">
             <span class="text-white"><?= $current_date ?></span>
-            <a href="logout.php" class="btn btn-danger ms-3">
-                <i class="bi bi-box-arrow-right"></i> Keluar
-            </a>
+            <button class="btn btn-danger ms-3" data-bs-toggle="modal" data-bs-target="#logoutModal">
+    <i class="bi bi-box-arrow-right"></i> Keluar
+</button>
+
         </div>
     </div>
 </nav>
@@ -386,7 +386,7 @@ if (isset($_POST['add_task'])) {
                          onchange="this.form.submit();">
                  <label>Selesaikan</label>
              </form>
-            <!-- Button untuk menghapus tugas -->
+            <!-- Button menghapus tugas -->
             <button type="button" class="btn btn-danger btn-sm delete-task-btn" 
              data-bs-toggle="modal" 
              data-bs-target="#deleteModal"
@@ -577,6 +577,27 @@ if (!$todo['completed'] && $todo['deadline'] > $current_date): ?>
         </div>
     </div>
 </div>
+<!-- Modal Logout -->
+<div class="modal fade" id="logoutModal" tabindex="-1" aria-labelledby="logoutModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="logoutModalLabel">Konfirmasi Keluar</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+      </div>
+      <div class="modal-body">
+        Apakah Anda yakin ingin keluar dari akun?
+      </div>
+      <div class="modal-footer">
+        <form action="logout.php" method="POST">
+          <button type="submit" name="logout" class="btn btn-danger">Keluar</button>
+        </form>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
     function setMinDeadline() {
         let now = new Date();
